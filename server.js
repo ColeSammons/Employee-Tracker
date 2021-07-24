@@ -59,8 +59,10 @@ const promptQuestions = () => {
                     addRole();
                     break;
                 case 'Add an employee':
+                    addEmployee();
                     break;
                 case 'Update an employee role':
+                    updateEmployee();
                     break;
             }
         })
@@ -168,7 +170,7 @@ function addRole() {
     {
         type: 'list',
         name: 'chooseDept',
-        message: 'What would you like to do?',
+        message: 'Choose a department for the role.',
         choices: function () {
             let array = deptArray.map(data => data.dept_name);
             return array;
@@ -181,10 +183,166 @@ function addRole() {
             const params = [response.roleName, response.roleSalary, deptChosen[0].id];
 
             db.query(sql, params, (err, result) => {
-                if (err) reject('Error inserting results');
+                if (err) throw err;
                 console.log(`\n${response.roleName} successfully added to database.\n`)
                 promptQuestions();
             });
         })
 };
 
+async function addEmployee() {
+    let roleTitles = [];
+    let roleArray = [];
+    let managerNames = [];
+    let managerArray = [];
+
+    await db.promise().query('SELECT * FROM roles')
+        .then(([rows, fields]) => {
+            roleTitles = rows.map(data => {
+                return data.title;
+            });
+            roleArray = rows.map(data => {
+                return {
+                    title: data.title,
+                    id: data.id
+                };
+            });
+        });
+
+    await db.promise().query('SELECT * FROM employees e WHERE e.manager_id IS NULL')
+        .then(([rows, fields]) => {
+            managerNames = rows.map(data => {
+                return `${data.first_name} ${data.last_name}`;
+            });
+            managerArray = rows.map(data => {
+                return {
+                    name: `${data.first_name} ${data.last_name}`,
+                    id: data.id
+                };
+            });
+        });
+
+    inquirer.prompt([{
+        type: 'input',
+        message: "Enter the first name of the employee.",
+        name: 'firstName',
+        validate: nameInput => {
+            if (nameInput) {
+                return true;
+            } else {
+                console.log("Please enter the employee's first name!");
+                return false;
+            }
+        }
+    },
+    {
+        type: 'input',
+        message: "Enter the last name of the employee.",
+        name: 'lastName',
+        validate: nameInput => {
+            if (nameInput) {
+                return true;
+            } else {
+                console.log("Please enter the employee's last name!");
+                return false;
+            }
+        }
+    },
+    {
+        type: 'list',
+        name: 'chooseRole',
+        message: 'Enter a role for the employee.',
+        choices: roleTitles
+    },
+    {
+        type: 'list',
+        name: 'chooseManager',
+        message: 'Enter a manager for the employee.',
+        choices: managerNames
+    }
+    ])
+        .then(response => {
+            const roleChosen = roleArray.filter(data => data.title.trim() == response.chooseRole.trim());
+            const managerChosen = managerArray.filter(data => data.name.trim() == response.chooseManager.trim());
+
+
+            const sql = `INSERT INTO employees (first_name, last_name, role_id, manager_id) VALUES (?, ? , ?, ?)`;
+            const params = [response.firstName, response.lastName, roleChosen[0].id, managerChosen[0].id];
+
+            db.query(sql, params, (err, result) => {
+                if (err) throw err;
+                console.log(`\n${response.firstName} ${response.lastName} successfully added to database.\n`)
+                promptQuestions();
+            });
+        });
+};
+
+async function updateEmployee() {
+    let employeeArray = [];
+    let employeeNames = [];
+    let roleTitles = [];
+    let roleArray = [];
+
+    await db.promise().query('SELECT * FROM roles')
+        .then(([rows, fields]) => {
+            roleTitles = rows.map(data => {
+                return data.title;
+            });
+            roleArray = rows.map(data => {
+                return {
+                    title: data.title,
+                    id: data.id
+                };
+            });
+        });
+
+    await db.promise().query('SELECT * FROM employees')
+        .then(([rows, fields]) => {
+            employeeNames = rows.map(data => {
+                return `${data.first_name} ${data.last_name}`;
+            });
+            employeeArray = rows.map(data => {
+                return {
+                    first_name: data.first_name,
+                    last_name: data.last_name,
+                    manager_id: data.manager_id,
+                    id: data.id
+                };
+            });
+        });
+
+    inquirer.prompt([
+        {
+            type: 'list',
+            name: 'chooseEmployee',
+            message: 'Choose the employee you would like to update',
+            choices: employeeNames
+        },
+        {
+            type: 'list',
+            name: 'chooseRole',
+            message: 'Choose the role you want for the employee',
+            choices: roleTitles
+        }
+    ])
+        .then(response => {
+            const roleChosen = roleArray.filter(data => data.title.trim() == response.chooseRole.trim());
+            const employeeChosen = employeeArray.filter(data => {
+                if (`${data.first_name} ${data.last_name}` == response.chooseEmployee) return true;
+                else false;
+            })
+
+
+            const sql = `UPDATE employees
+                        SET first_name = ?, last_name = ?, role_id = ?, manager_id = ?
+                        WHERE id = ?`;
+            const params = [employeeChosen[0].first_name, employeeChosen[0].last_name, roleChosen[0].id, employeeChosen[0].manager_id, employeeChosen[0].id];
+
+            db.query(sql, params, (err, result) => {
+                if (err) throw err;
+                console.log(`\n${employeeChosen[0].first_name} ${employeeChosen[0].last_name} successfully updated.\n`)
+                promptQuestions();
+            });
+        });
+
+};
